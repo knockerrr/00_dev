@@ -1,8 +1,0 @@
-Command: cmake -G Ninja -DPYTHON_DEPS_CHECKED=1 -DPYTHON=/home/deb1/.espressif/python_env/idf6.0_py3.13_env/bin/python -DESP_PLATFORM=1 -DCCACHE_ENABLE=0 /home/deb1/esp/projects/00_dev
-CMake Warning:
-  Manually-specified variables were not used by the project:
-
-    CCACHE_ENABLE
-    ESP_PLATFORM
-
-
