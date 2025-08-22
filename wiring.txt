@@ -1,12 +1,14 @@
-1: COM
-2: NO
-3: NO
-4: NC
+		   ___
+1: COM		  |NC |
+2: NO		\ |NO |
+3: NO		 \|COM|
+4: NC		  |   |
+		  |___|
+		  1234
 
-   ___
-  |NC |
-\ |NO |
- \|COM|
-  |   |
-  |___|
-  1234
+
+
+train of thought:	SWITCH_PIN is HIGH when Circuit is open
+			SWITCH_PIN is LOW when Circuit is closed
+function is triggered when (SWITCH_PIN == 0) <=> true
+=> configure switch as NC

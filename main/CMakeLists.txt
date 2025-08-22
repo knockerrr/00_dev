@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "main.c"
-
-    REQUIRES switch
+	SRCS "main.c"
+	INCLUDE_DIRS "."
+	REQUIRES switch
 )
