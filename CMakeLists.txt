@@ -1,15 +1,13 @@
-# Project CMakeLists.txt
-# 1
+### root CMakeLists.txt ###
+
 cmake_minimum_required(VERSION 3.16)
-set(PROJECT_NAME "00_dev")
-project(${PROJECT_NAME})
 
 
-# 2
-set(EXTRA_COMPONENT_DIRS ${CMAKE_CURRENT_LIST_DIR}/components)
-
-# 3
-set(IDF_PATH $HOME/deb1/esp/esp-idf)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
-# 4
+
+set(PROJECT_NAME "00_dev")
+set(EXTRA_COMPONENT_DIRS ${CMAKE_CURRENT_LIST_DIR}/components)
+
+
+project(${PROJECT_NAME})

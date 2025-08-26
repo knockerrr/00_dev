@@ -1,14 +1,4 @@
-		   ___
-1: COM		  |NC |
-2: NO		\ |NO |
-3: NO		 \|COM|
-4: NC		  |   |
-		  |___|
-		  1234
+***TODO:***
+>wifi_setup: wifi_callback in wifi_setup integrieren (es soll keine funktion extern aufgerufen werden sondern die ip_info soll einfach jedes mal wenn das wlan sich verbindet (also als sta) dann soll ip_config gelogt werden)
 
-
-
-train of thought:	SWITCH_PIN is HIGH when Circuit is open
-			SWITCH_PIN is LOW when Circuit is closed
-function is triggered when (SWITCH_PIN == 0) <=> true
-=> configure switch as NC
+>LOG file erstellen die die letzten some 1000 lines LOG beinhaltet und bei mitgesendet wird beim DAILY ROUTINE senden

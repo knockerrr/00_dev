@@ -3,9 +3,9 @@
 #define SWITCH_H
 
 #include <stdbool.h>
+#include "esp_err.h"
 
-
-void switch_init(void);
+esp_err_t switch_init(void);
 bool switch_is_closed(void);
 
 
