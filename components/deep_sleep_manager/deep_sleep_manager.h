@@ -34,8 +34,9 @@ void enter_deep_sleep(void);
  * 
  * @param switch_func Funktion die beim Schalter-Wakeup ausgeführt wird
  * @param timer_func Funktion die beim Timer-Wakeup (24h) ausgeführt wird
+ * @param boot_rst_func Funktion die bei Boot/Reset ausgeführt wird
  */
-void handle_wakeup(void (*switch_func)(void), void (*timer_func)(void));
+void handle_wakeup(void (*switch_func)(void), void (*timer_func)(void), void (*boot_rst_func)(void));
 
 #ifdef __cplusplus
 }
