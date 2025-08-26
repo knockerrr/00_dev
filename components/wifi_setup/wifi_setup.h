@@ -2,6 +2,7 @@
 #define WIFI_SETUP_H
 
 #include "esp_err.h"
+#include "esp_random.h"
 #include <stdbool.h>
 
 #ifdef __cplusplus

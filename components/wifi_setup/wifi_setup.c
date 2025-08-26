@@ -123,7 +123,12 @@ static void stop_timeout_task(void) {
     }
 }
 
-static uint32_t current_csrf_token = 0;
+
+static uint32_t generate_csrf_token(void)
+{
+    return esp_random();
+	ESP_LOGE(TAG, "Failed to generate CSRF Token!");
+}
 
 // URL decode function
 static void url_decode(char* str) {
@@ -432,14 +437,14 @@ esp_err_t wifi_setup_start_portal(wifi_setup_callback_t callback)
     
     // Configure secure AP
     wifi_config_t wifi_config = {
-        .ap = {
-            .ssid = "ESP32-WiFi-Setup",
-            .ssid_len = 0, //TODO >fix this error somewhat like .ssid_len = strlen(ssid)
-            .max_connection = 1,
-            .authmode = WIFI_AUTH_WPA2_PSK,
-            .beacon_interval = 100,
-        },
-    };
+		.ap = {
+			.ssid = "ESP32-WiFi-Setup",
+			.ssid_len = strlen("ESP32-WiFi-Setup"),
+			.max_connection = 1,
+			.authmode = WIFI_AUTH_WPA2_PSK,
+			.beacon_interval = 100,
+		},
+	};
     
     // Set password
     strncpy((char*)wifi_config.ap.password, setup_password, sizeof(wifi_config.ap.password));
@@ -576,6 +581,28 @@ esp_err_t wifi_setup_clear_credentials(void)
     
     ESP_LOGI(TAG, "WiFi credentials cleared");
     return ESP_OK;
+}
+
+static void cleanup_wifi_resources(void)
+{
+    stop_timeout_task();
+    
+    if (current_state != WIFI_SETUP_STATE_DISABLED) {
+        esp_wifi_stop();
+        esp_wifi_deinit();
+        
+        if (sta_netif) {
+            esp_netif_destroy_default_wifi(sta_netif);
+            sta_netif = NULL;
+        }
+        
+        // Unregister event handlers
+        esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler);
+        esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler);
+        
+        current_state = WIFI_SETUP_STATE_DISABLED;
+        ESP_LOGI(TAG, "WiFi resources cleaned up");
+    }
 }
 
 wifi_setup_state_t wifi_setup_get_state(void)

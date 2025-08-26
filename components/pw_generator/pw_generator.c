@@ -1,4 +1,4 @@
-#include "password_generator.h"
+#include "pw_generator.h"
 #include "esp_system.h"
 #include "esp_log.h"
 #include <string.h>
