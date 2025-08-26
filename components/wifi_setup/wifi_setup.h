@@ -2,7 +2,7 @@
 #define WIFI_SETUP_H
 
 #include "esp_err.h"
-#include "esp_random.h"
+#include "esp_netif.h"  // Add this include for esp_netif_ip_info_t
 #include <stdbool.h>
 
 #ifdef __cplusplus

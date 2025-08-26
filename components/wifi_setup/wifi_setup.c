@@ -1,5 +1,5 @@
 #include "wifi_setup.h"
-#include "password_generator.h"
+#include "pw_generator.h"
 #include "esp_log.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
@@ -7,10 +7,13 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "esp_netif.h"
+#include "esp_random.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
+#include <stdlib.h>
 #include <string.h>
+#include <sys/param.h>
 
 static const char *TAG = "WIFI_SETUP";
 static const char *NVS_NAMESPACE = "wifi_setup";
@@ -31,6 +34,10 @@ static int wifi_retry_num = 0;
 static char setup_password[SETUP_PASSWORD_LEN + 1];
 static TaskHandle_t timeout_task_handle = NULL;
 static bool stay_connected_flag = false;
+static uint32_t current_csrf_token = 0;
+
+static uint32_t generate_csrf_token(void);
+static void cleanup_wifi_resources(void);
 
 // Timeout settings
 #define PORTAL_TIMEOUT_MS (5 * 60 * 1000)  // 5 minutes for portal
@@ -124,11 +131,6 @@ static void stop_timeout_task(void) {
 }
 
 
-static uint32_t generate_csrf_token(void)
-{
-    return esp_random();
-	ESP_LOGE(TAG, "Failed to generate CSRF Token!");
-}
 
 // URL decode function
 static void url_decode(char* str) {
@@ -154,6 +156,34 @@ static void url_decode(char* str) {
         src++;
     }
     *dst = '\0';
+}
+
+static void cleanup_wifi_resources(void)
+{
+    stop_timeout_task();
+    
+    if (current_state != WIFI_SETUP_STATE_DISABLED) {
+        esp_wifi_stop();
+        esp_wifi_deinit();
+        
+        if (sta_netif) {
+            esp_netif_destroy_default_wifi(sta_netif);
+            sta_netif = NULL;
+        }
+        
+        // Unregister event handlers
+        esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler);
+        esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler);
+        
+        current_state = WIFI_SETUP_STATE_DISABLED;
+        ESP_LOGI(TAG, "WiFi resources cleaned up");
+    }
+}
+
+static uint32_t generate_csrf_token(void)
+{
+    return esp_random();
+	ESP_LOGE(TAG, "Failed to generate CSRF Token!");
 }
 
 // WiFi event handler
@@ -211,6 +241,31 @@ static esp_err_t setup_get_handler(httpd_req_t *req)
     return httpd_resp_send(req, html_buffer, strlen(html_buffer));
 }
 
+static void wifi_connect_task(void* param)
+{
+    vTaskDelay(pdMS_TO_TICKS(1000)); // Let response send
+    
+    // Stop portal and connect to WiFi
+    current_state = WIFI_SETUP_STATE_CONNECTING;
+    wifi_setup_stop_portal();
+    
+    // Get credentials and connect
+    wifi_credentials_t* creds = (wifi_credentials_t*)param;
+    stay_connected_flag = false; // Default: auto-disconnect after timeout
+    
+    // Connect using the new function
+    esp_err_t connect_err = wifi_setup_connect(setup_callback, false);
+    if (connect_err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start WiFi connection");
+        if (setup_callback) {
+            setup_callback(false, NULL);
+        }
+    }
+    
+    free(param);
+    vTaskDelete(NULL);
+}
+
 // HTTP POST handler with security checks
 static esp_err_t save_post_handler(httpd_req_t *req)
 {
@@ -221,7 +276,7 @@ static esp_err_t save_post_handler(httpd_req_t *req)
         save_attempt_count++;
         if (save_attempt_count > MAX_SAVE_ATTEMPTS) {
             ESP_LOGW(TAG, "Rate limit exceeded");
-            httpd_resp_send_err(req, HTTPD_429_TOO_MANY_REQUESTS, "Too many attempts");
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Too many attempts");
             return ESP_FAIL;
         }
     } else {
@@ -332,29 +387,15 @@ static esp_err_t save_post_handler(httpd_req_t *req)
     httpd_resp_send(req, success_html, strlen(success_html));
     
     // Start WiFi connection in background task
-    xTaskCreate([](void* param) {
-        vTaskDelay(pdMS_TO_TICKS(1000)); // Let response send
-        
-        // Stop portal and connect to WiFi
-        current_state = WIFI_SETUP_STATE_CONNECTING;
-        wifi_setup_stop_portal();
-        
-        // Get credentials and connect
-        wifi_credentials_t* creds = (wifi_credentials_t*)param;
-        stay_connected_flag = false; // Default: auto-disconnect after timeout
-        
-        // Connect using the new function
-        esp_err_t connect_err = wifi_setup_connect(setup_callback, false);
-        if (connect_err != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to start WiFi connection");
-            if (setup_callback) {
-                setup_callback(false, NULL);
-            }
-        }
-        
-        free(param);
-        vTaskDelete(NULL);
-    }, "wifi_connect", 4096, &creds, 5, NULL);
+    wifi_credentials_t* creds_copy = malloc(sizeof(wifi_credentials_t));
+	if (creds_copy) {
+		memcpy(creds_copy, &creds, sizeof(wifi_credentials_t));
+		xTaskCreate(wifi_connect_task, "wifi_connect", 4096, creds_copy, 5, NULL);
+	} else {
+		ESP_LOGE(TAG, "Failed to allocate memory for credentials");
+		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Memory error");
+    return ESP_FAIL;
+	}
     
     return ESP_OK;
 }
@@ -581,28 +622,6 @@ esp_err_t wifi_setup_clear_credentials(void)
     
     ESP_LOGI(TAG, "WiFi credentials cleared");
     return ESP_OK;
-}
-
-static void cleanup_wifi_resources(void)
-{
-    stop_timeout_task();
-    
-    if (current_state != WIFI_SETUP_STATE_DISABLED) {
-        esp_wifi_stop();
-        esp_wifi_deinit();
-        
-        if (sta_netif) {
-            esp_netif_destroy_default_wifi(sta_netif);
-            sta_netif = NULL;
-        }
-        
-        // Unregister event handlers
-        esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler);
-        esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler);
-        
-        current_state = WIFI_SETUP_STATE_DISABLED;
-        ESP_LOGI(TAG, "WiFi resources cleaned up");
-    }
 }
 
 wifi_setup_state_t wifi_setup_get_state(void)
